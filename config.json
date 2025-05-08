@@ -1,0 +1,113 @@
+{
+    "description": "Secrets plugin for Docker with multiple backends and auto rotation support",
+    "documentation": "https://github.com/olljanat/docker-secretprovider-plugin",
+    "entrypoint": [
+        "/docker-secretprovider-plugin"
+    ],
+    "env": [
+        {
+            "description": "Secrets backend",
+            "name": "SECRET_BACKEND",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "Azure Tenant ID",
+            "name": "AZURE_TENANT_ID",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "Azure Client ID",
+            "name": "AZURE_CLIENT_ID",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "Azure Client Secret",
+            "name": "AZURE_CLIENT_SECRET",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "Azure Key Vault URL",
+            "name": "AZURE_KEYVAULT_URL",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "HashiCorp Vault URL",
+            "name": "VAULT_ADDR",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "HashiCorp Vault Path",
+            "name": "VAULT_PATH",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "HashiCorp Vault Token",
+            "name": "VAULT_TOKEN",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "Passwordstate API URL",
+            "name": "PASSWORDSTATE_BASE_URL",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "Passwordstate API key",
+            "name": "PASSWORDSTATE_API_KEY",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        },
+        {
+            "description": "Passwordstate list ID",
+            "name": "PASSWORDSTATE_LIST_ID",
+            "settable": [
+                "value"
+            ],
+            "value": ""
+        }
+    ],
+    "interface": {
+        "socket": "secret.sock",
+        "types": [
+            "docker.volumedriver/1.0"
+        ]
+    },
+    "linux": {
+        "capabilities": [
+            "CAP_SYS_ADMIN"
+        ]
+    },
+    "mounts": [],
+    "network": {
+        "type": "host"
+    },
+    "propagatedmount": "/secrets"
+}

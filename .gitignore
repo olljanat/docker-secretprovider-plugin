@@ -1,0 +1,4 @@
+.vs/*
+docker-secretprovider-plugin
+docker-secretprovider-plugin.exe
+rootfs/*
