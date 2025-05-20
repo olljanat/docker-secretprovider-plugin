@@ -8,14 +8,17 @@ Supported backends:
 
 **TODO**
 * Run docker-secretprovider-plugin.exe as service in Windows
-* Save info about added secrets or even create them automatically based on backend content?
-* Store config to secured JSON file before plugin install
+
+**NOTE!!!** Please, make sure that you always use long format of --mount command with `volume-driver=secret` parameter.
+Other why you might end up to have local volume with that name instead of.
 
 # Usage
 ## Linux
 ```bash
 docker volume create --driver secret secret-test1
-docker run -it --rm -u nobody -v secret-test1:/secrets/test1 bash
+docker run -it --rm -u nobody \
+ --mount type=volume,volume-driver=secret,src=test1,dst=/secrets/test1 \
+  bash
 cat /secrets/test1
 ```
 
@@ -23,11 +26,10 @@ cat /secrets/test1
 ```powershell
 docker volume create --driver secret secret-test1
 docker volume ls
-docker run -it --rm -v secret-test1:C:\secrets\test1 mcr.microsoft.com/windows/nanoserver:ltsc2022
+docker run -it --rm `
+  --mount type=volume,volume-driver=secret,src=test1,dst=C:\secrets\test1 `
+  mcr.microsoft.com/windows/nanoserver:ltsc2022
 type C:\secrets\test1
-
-docker run -it --rm -v secret-test1:C:\ProgramData\Docker\secrets\test1 mcr.microsoft.com/windows/nanoserver:ltsc2022
-type C:\ProgramData\Docker\secrets\test1
 ```
 
 # Installation
@@ -53,7 +55,7 @@ az ad sp create-for-rbac -n docker-secretprovider-plugin --years 5
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v0.1 \
+  ollijanatuinen/docker-secretprovider-plugin:v0.2 \
   SECRET_BACKEND="azure" \
   AZURE_TENANT_ID="13a69a3b-cf5f-4204-b274-3e9ce5240a60" \
   AZURE_CLIENT_ID="2bb1a59c-72c5-4fba-81b3-f22974dfdf58" \
@@ -76,14 +78,15 @@ $env:AZURE_KEYVAULT_URL="https://dockersecret.vault.azure.net"
   * Secrets Engines -> Enable new engine -> Generic: KV -> Path: `docker`
 * Add test secret under engine "docker"
   * Path for this secret: `test1`
-  * Secret data -> key = **secret** (hardcoded value because of compatibility with other backends)
+  * Secret data -> key = **Secret** (hardcoded value because of compatibility with other backends)
+  * Custom metadata -> key = **ExpiryDate** in format `yyyy-MM-DD` (hardcoded value because of compatibility with other backends)
 * Install plugin to servers like described below.
 ### Linux
 ```bash
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v0.1 \
+  ollijanatuinen/docker-secretprovider-plugin:v0.2 \
   SECRET_BACKEND="vault" \
   VAULT_ADDR="http://100.64.255.102:8200" \
   VAULT_PATH="docker" \

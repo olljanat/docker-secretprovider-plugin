@@ -1,22 +1,22 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/olljanat/docker-secretprovider-plugin/backends"
-
 	"github.com/docker/go-plugins-helpers/volume"
+	"github.com/olljanat/docker-secretprovider-plugin/backend"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	prefix          = "secret-"
-	refreshInterval = 1 * time.Hour
+	refreshInterval = 30 * time.Second
+	// refreshInterval = 1 * time.Hour
+	dbFile = "secrets.json"
 )
 
 var (
@@ -24,7 +24,14 @@ var (
 )
 
 type SecretBackend interface {
-	FetchSecret(secretName string, options map[string]string) (string, error)
+	FetchSecret(secretName string) (*backend.FetchSecretResponse, error)
+	ListSecrets() ([]string, error)
+}
+
+type volumeInfo struct {
+	SecretName string
+	UpdatedAt  time.Time
+	ExpiresAt  time.Time
 }
 
 type VolumeDriver struct {
@@ -33,16 +40,14 @@ type VolumeDriver struct {
 	mu      sync.RWMutex
 }
 
-type volumeInfo struct {
-	SecretName  string
-	Options     map[string]string
-	LastUpdated time.Time
-}
-
 func NewVolumeDriver(backend SecretBackend) *VolumeDriver {
 	d := &VolumeDriver{
 		volumes: make(map[string]*volumeInfo),
 		backend: backend,
+	}
+
+	if err := d.loadDB(); err != nil {
+		log.Errorf("Failed to read database from disk: %v", err)
 	}
 	go d.startSecretRefresh()
 	return d
@@ -52,108 +57,95 @@ func (d *VolumeDriver) startSecretRefresh() {
 	ticker := time.NewTicker(refreshInterval)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			d.mu.Lock()
-			for name, vol := range d.volumes {
-				if err := d.updateSecretFile(name, vol); err != nil {
-					log.Errorf("Failed to update secret for volume %s: %v", name, err)
-				}
+	for range ticker.C {
+		d.mu.Lock()
+		for name, vol := range d.volumes {
+			if err := d.updateSecretFile(name, vol, false); err != nil {
+				log.Errorf("Failed to update secret for volume %s: %v", name, err)
 			}
-			d.mu.Unlock()
 		}
+		d.mu.Unlock()
 	}
 }
 
-func (d *VolumeDriver) updateSecretFile(secretName string, vol *volumeInfo) error {
-	secret, err := d.backend.FetchSecret(vol.SecretName, vol.Options)
+func (d *VolumeDriver) updateSecretFile(volumeName string, vol *volumeInfo, add bool) error {
+	secretFile := filepath.Join(baseDir, volumeName)
+	if _, err := os.Stat(secretFile); os.IsNotExist(err) && !add {
+		return nil
+	}
+
+	secret, err := d.backend.FetchSecret(vol.SecretName)
 	if err != nil {
 		return fmt.Errorf("error fetching secret: %v", err)
 	}
 
-	secretFile := filepath.Join(baseDir, secretName)
-	if err := os.WriteFile(secretFile, []byte(secret), 0644); err != nil {
-		return fmt.Errorf("error writing secret to %s: %v", secretFile, err)
+	if old, err := os.ReadFile(secretFile); err == nil && string(old) == secret.Value {
+		return nil
 	}
-
-	vol.LastUpdated = time.Now()
-	log.Infof("Updated secret for volume %s", secretName)
+	if err := os.WriteFile(secretFile, []byte(secret.Value), 0644); err != nil {
+		return fmt.Errorf("error writing secret %s: %v", volumeName, err)
+	}
+	vol.UpdatedAt = secret.UpdatedAt
+	vol.ExpiresAt = secret.ExpiresAt
+	d.saveDB()
+	log.Printf("Updated secret for volume %s", volumeName)
 	return nil
 }
 
 func (d *VolumeDriver) Create(r *volume.CreateRequest) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	secretName := ""
-	if strings.HasPrefix(r.Name, prefix) {
-		secretName = strings.TrimPrefix(r.Name, prefix)
-	} else {
-		return fmt.Errorf("volume name '%s' does not have the required prefix '%s'", r.Name, prefix)
-	}
-
-	vol := &volumeInfo{
-		SecretName: secretName,
-		Options:    r.Options,
-	}
-	d.volumes[r.Name] = vol
-
-	secretFile := filepath.Join(baseDir, r.Name)
-	if err := d.updateSecretFile(r.Name, vol); err != nil {
-		os.Remove(secretFile)
-		delete(d.volumes, r.Name)
-		return err
-	}
-
-	log.Infof("Created volume %s", r.Name)
 	return nil
 }
 
 func (d *VolumeDriver) List() (*volume.ListResponse, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	var vols []*volume.Volume
-	for name, _ := range d.volumes {
-		vols = append(vols, &volume.Volume{
-			Name: name,
-		})
+	names, err := d.backend.ListSecrets()
+	if err != nil {
+		log.Errorf("Failed to list secrets: %v", err)
 	}
+
+	d.mu.RLock()
+	volumes := d.volumes
+	d.mu.RUnlock()
+
+	for _, name := range names {
+		if _, exists := volumes[name]; !exists {
+			d.mu.Lock()
+			volumes[name] = &volumeInfo{
+				SecretName: name,
+				UpdatedAt:  time.Time{},
+			}
+			d.mu.Unlock()
+		}
+	}
+	var vols []*volume.Volume
+	for name := range volumes {
+		vols = append(vols, &volume.Volume{Name: name})
+	}
+
 	return &volume.ListResponse{Volumes: vols}, nil
 }
 
 func (d *VolumeDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 	d.mu.RLock()
-	defer d.mu.RUnlock()
+	volumes := d.volumes
+	d.mu.RUnlock()
 
-	_, exists := d.volumes[r.Name]
+	vol, exists := volumes[r.Name]
 	if !exists {
-		return nil, fmt.Errorf("volume %s not found", r.Name)
+		d.List()
+		vol, exists = volumes[r.Name]
+		if !exists {
+			return nil, fmt.Errorf("volume %s not found", r.Name)
+		}
 	}
 	return &volume.GetResponse{
 		Volume: &volume.Volume{
-			Name: r.Name,
+			Name:      r.Name,
+			CreatedAt: vol.UpdatedAt.Format(time.RFC3339),
 		},
 	}, nil
 }
 
 func (d *VolumeDriver) Remove(r *volume.RemoveRequest) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	_, exists := d.volumes[r.Name]
-	if !exists {
-		return fmt.Errorf("volume %s not found", r.Name)
-	}
-
-	secretFile := filepath.Join(baseDir, r.Name)
-	if err := os.Remove(secretFile); err != nil {
-		return fmt.Errorf("failed to remove secret %s: %v", secretFile, err)
-	}
-
-	delete(d.volumes, r.Name)
-	log.Infof("Removed volume %s", r.Name)
 	return nil
 }
 
@@ -171,13 +163,21 @@ func (d *VolumeDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error)
 
 func (d *VolumeDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
 	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	_, exists := d.volumes[r.Name]
+	vol, exists := d.volumes[r.Name]
 	if !exists {
 		return nil, fmt.Errorf("volume %s not found", r.Name)
 	}
+	d.mu.RUnlock()
 	secretFile := filepath.Join(baseDir, r.Name)
+
+	if _, err := os.Stat(secretFile); os.IsNotExist(err) {
+		d.mu.Lock()
+		if err := d.updateSecretFile(r.Name, vol, true); err != nil {
+			log.Errorf("Failed to update secret for volume %s: %v", r.Name, err)
+		}
+		d.mu.Unlock()
+	}
+
 	return &volume.MountResponse{Mountpoint: secretFile}, nil
 }
 
@@ -203,7 +203,7 @@ func main() {
 		log.Fatal("SECRET_BACKEND environment variable is required (azure, passwordstate, vault)")
 	}
 
-	var backend SecretBackend
+	var b SecretBackend
 	var err error
 
 	switch backendType {
@@ -224,7 +224,7 @@ func main() {
 		if keyVaultURL == "" {
 			log.Fatal("AZURE_KEYVAULT_URL environment variable is required")
 		}
-		backend, err = backends.NewAzureKeyVaultBackend(keyVaultURL)
+		b, err = backend.NewAzureKeyVaultBackend(keyVaultURL)
 		if err != nil {
 			log.Fatalf("Failed to initialize Azure Key Vault backend: %v", err)
 		}
@@ -242,7 +242,7 @@ func main() {
 		if vaultToken == "" {
 			log.Fatal("VAULT_TOKEN environment variable is required")
 		}
-		backend, err = backends.NewVaultBackend(vaultAddr, vaultPath, vaultToken)
+		b, err = backend.NewVaultBackend(vaultAddr, vaultPath, vaultToken)
 		if err != nil {
 			log.Fatalf("Failed to initialize HashiCorp Vault backend: %v", err)
 		}
@@ -259,14 +259,55 @@ func main() {
 		if listID == "" {
 			log.Fatal("PASSWORDSTATE_LIST_ID environment variable is required")
 		}
-		backend = backends.NewPasswordstateBackend(baseURL, apiKey, listID)
+		b = backend.NewPasswordstateBackend(baseURL, apiKey, listID)
 	default:
 		log.Fatalf("Unsupported backend: %s", backendType)
 	}
 
-	d := NewVolumeDriver(backend)
+	d := NewVolumeDriver(b)
 	h := volume.NewHandler(d)
 
 	log.Infof("Starting secrets plugin with %s backend", backendType)
 	serve(h)
+}
+
+func (d *VolumeDriver) loadDB() error {
+	dbPath := filepath.Join(baseDir, dbFile)
+	data, err := os.ReadFile(dbPath)
+	if err != nil {
+		return err
+	}
+	var m map[string]volumeInfo
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	for name, info := range m {
+		d.volumes[name] = &volumeInfo{
+			SecretName: info.SecretName,
+			UpdatedAt:  info.UpdatedAt,
+			ExpiresAt:  info.ExpiresAt,
+		}
+	}
+	return nil
+}
+
+func (d *VolumeDriver) saveDB() error {
+	dbPath := filepath.Join(baseDir, dbFile)
+	tmp := dbPath + ".tmp"
+	m := make(map[string]volumeInfo, len(d.volumes))
+	for name, v := range d.volumes {
+		m[name] = volumeInfo{
+			SecretName: v.SecretName,
+			UpdatedAt:  v.UpdatedAt,
+			ExpiresAt:  v.ExpiresAt,
+		}
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, dbPath)
 }
