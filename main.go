@@ -10,17 +10,15 @@ import (
 
 	"github.com/docker/go-plugins-helpers/volume"
 	"github.com/olljanat/docker-secretprovider-plugin/backend"
-	"github.com/sirupsen/logrus"
 )
 
 const (
-	refreshInterval = 30 * time.Second
-	// refreshInterval = 1 * time.Hour
-	dbFile = "secrets.json"
+	refreshInterval = 1 * time.Hour
+	dbFile          = "secrets.json"
 )
 
 var (
-	log = logrus.New()
+	log = logger()
 )
 
 type SecretBackend interface {

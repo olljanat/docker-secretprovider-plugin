@@ -6,9 +6,6 @@ Supported backends:
 * [HashiCorp Vault](https://www.hashicorp.com/en/products/vault)
 * [Passwordstate](https://www.clickstudios.com.au/passwordstate.aspx)
 
-**TODO**
-* Run docker-secretprovider-plugin.exe as service in Windows
-
 **NOTE!!!** Please, make sure that you always use long format of --mount command with `volume-driver=secret` parameter.
 Other why you might end up to have local volume with that name instead of.
 
@@ -33,6 +30,31 @@ type C:\secrets\test1
 ```
 
 # Installation
+Windows binaries are published under releases. Linux plugins can installed directly from Docker Hub like described below.
+
+## Windows
+Installation commands are same for all backends in Windows so it described here just once.
+```powershell
+# Copy binary and create service
+Copy-Item -Path docker-secretprovider-plugin.exe -Destination "C:\Program Files\docker"
+New-Service -Name "docker-secret" -DisplayName "Secrets plugin for Docker" `
+  -BinaryPathName "C:\Program Files\docker\docker-secretprovider-plugin.exe" -StartupType Automatic
+
+# Register eventlog handler
+$log = "HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\docker-secret"
+New-Item -Path $log -Force
+Set-ItemProperty -Path $log -Name CustomSource -Value 1
+Set-ItemProperty -Path $log -Name EventMessageFile -Value "C:\Program Files\docker\docker-secretprovider-plugin.exe"
+Set-ItemProperty -Path $log -Name TypesSupported -Value 7
+
+# Make Docker service depend on of plugin service
+## Please note that you need reboot server before this is effective.
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\docker" `
+  -Name DependOnService -Type MultiString -Value @("docker-secret")
+```
+Check configuration guide under each backend section.
+
+
 ## Azure Key Vault
 * Create service principal with long enough validity period.
 ```bash
@@ -50,26 +72,33 @@ az ad sp create-for-rbac -n docker-secretprovider-plugin --years 5
     * List public IPs of non-Azure VMs using this plugin.
 * Add test secret to Key Vault.
 * Install plugin to servers like described below.
+
 ### Linux
 ```bash
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v0.2 \
+  ollijanatuinen/docker-secretprovider-plugin:v0.3 \
   SECRET_BACKEND="azure" \
   AZURE_TENANT_ID="13a69a3b-cf5f-4204-b274-3e9ce5240a60" \
   AZURE_CLIENT_ID="2bb1a59c-72c5-4fba-81b3-f22974dfdf58" \
-  AZURE_CLIENT_SECRET="" \
+  AZURE_CLIENT_SECRET="<secret>" \
   AZURE_KEYVAULT_URL="https://dockersecret.vault.azure.net"
 ```
+
 ### Windows
 ```powershell
-$env:SECRET_BACKEND="azure"
-$env:AZURE_TENANT_ID="13a69a3b-cf5f-4204-b274-3e9ce5240a60"
-$env:AZURE_CLIENT_ID="2bb1a59c-72c5-4fba-81b3-f22974dfdf58"
-$env:AZURE_CLIENT_SECRET=""
-$env:AZURE_KEYVAULT_URL="https://dockersecret.vault.azure.net"
-.\docker-secretprovider-plugin.exe
+# Add environment variables for service
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\docker-secret" `
+  -Name Environment `
+  -Type MultiString `
+  -Value @(
+  "SECRET_BACKEND=azure",
+  "AZURE_TENANT_ID=13a69a3b-cf5f-4204-b274-3e9ce5240a60",
+  "AZURE_CLIENT_ID=2bb1a59c-72c5-4fba-81b3-f22974dfdf58",
+  "AZURE_CLIENT_SECRET=<secret>",
+  "AZURE_KEYVAULT_URL=https://dockersecret.vault.azure.net"
+)
 ```
 
 ## HashiCorp Vault
@@ -81,29 +110,39 @@ $env:AZURE_KEYVAULT_URL="https://dockersecret.vault.azure.net"
   * Secret data -> key = **Secret** (hardcoded value because of compatibility with other backends)
   * Custom metadata -> key = **ExpiryDate** in format `yyyy-MM-DD` (hardcoded value because of compatibility with other backends)
 * Install plugin to servers like described below.
+
 ### Linux
 ```bash
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v0.2 \
+  ollijanatuinen/docker-secretprovider-plugin:v0.3 \
   SECRET_BACKEND="vault" \
-  VAULT_ADDR="http://100.64.255.102:8200" \
+  VAULT_ADDR="http://10.10.10.100:8200" \
   VAULT_PATH="docker" \
-  VAULT_TOKEN=""
+  VAULT_TOKEN="<token"
 ```
+
 ### Windows
 ```powershell
-$env:SECRET_BACKEND="vault"
-$env:VAULT_ADDR="http://100.64.255.102:8200"
-$env:VAULT_PATH="docker"
-$env:VAULT_TOKEN=""
-.\docker-secretprovider-plugin.exe
+# Add environment variables for service
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\docker-secret" `
+  -Name Environment `
+  -Type MultiString `
+  -Value @(
+  "SECRET_BACKEND=vault",
+  "VAULT_ADDR=http://10.10.10.100:8200",
+  "VAULT_PATH=docker",
+  "VAULT_TOKEN=<token>"
+)
 ```
+
 
 ## Passwordstate
 * Create list for this usage
 * Create API key
+* Configure IP restrictions for API key
+
 ### Linux
 ```bash
 docker plugin install \
@@ -114,11 +153,17 @@ docker plugin install \
   PASSWORDSTATE_API_KEY="<api key>" \
   PASSWORDSTATE_LIST_ID="123"
 ```
+
 ### Windows
 ```powershell
-$env:SECRET_BACKEND="passwordstate"
-$env:PASSWORDSTATE_BASE_URL="https://passwordstate/api"
-$env:PASSWORDSTATE_API_KEY="<api key>"
-$env:PASSWORDSTATE_LIST_ID="485"
-.\docker-secretprovider-plugin.exe
+# Add environment variables for service
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\docker-secret" `
+  -Name Environment `
+  -Type MultiString `
+  -Value @(
+  "SECRET_BACKEND=passwordstate",
+  "PASSWORDSTATE_BASE_URL=https://passwordstate/api",
+  "PASSWORDSTATE_API_KEY=<api key>",
+  "PASSWORDSTATE_LIST_ID=485"
+)
 ```
