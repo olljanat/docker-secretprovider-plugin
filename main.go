@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"sync"
 	"time"
 
@@ -15,10 +17,12 @@ import (
 const (
 	refreshInterval = 1 * time.Hour
 	dbFile          = "secrets.json"
+	npipeMaxBuf     = 4096
 )
 
 var (
-	log = logger()
+	log       = logger()
+	validName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 )
 
 type SecretBackend interface {
@@ -105,6 +109,10 @@ func (d *VolumeDriver) List() (*volume.ListResponse, error) {
 	d.mu.RUnlock()
 
 	for _, name := range names {
+		if !validName.MatchString(name) {
+			log.Printf("Warning: skipping invalid secret name %q; must match [A-Za-z0-9][A-Za-z0-9_.-]*", name)
+			continue
+		}
 		if _, exists := volumes[name]; !exists {
 			d.mu.Lock()
 			volumes[name] = &volumeInfo{
@@ -118,8 +126,17 @@ func (d *VolumeDriver) List() (*volume.ListResponse, error) {
 	for name := range volumes {
 		vols = append(vols, &volume.Volume{Name: name})
 	}
+	resp := &volume.ListResponse{Volumes: vols}
 
-	return &volume.ListResponse{Volumes: vols}, nil
+	if runtime.GOOS == "windows" {
+		if data, err := json.Marshal(resp); err == nil {
+			if len(data) > npipeMaxBuf {
+				log.Errorf("named pipe buffer too small: response size=%d bytes, max=%d; increase InBufferSize/OutBufferSize", len(data), npipeMaxBuf)
+			}
+		}
+	}
+
+	return resp, nil
 }
 
 func (d *VolumeDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
@@ -277,7 +294,7 @@ func (d *VolumeDriver) loadDB() error {
 	dbPath := filepath.Join(baseDir, dbFile)
 	data, err := os.ReadFile(dbPath)
 	if err != nil {
-		return err
+		return nil
 	}
 	var m map[string]volumeInfo
 	if err := json.Unmarshal(data, &m); err != nil {

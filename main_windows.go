@@ -54,7 +54,6 @@ loop:
 }
 
 func (p *program) run() {
-	log.Infof("Creating secrets folder: %v", baseDir)
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		if err := os.Mkdir(baseDir, os.ModePerm); err != nil {
 			log.Fatal(err)
@@ -63,7 +62,6 @@ func (p *program) run() {
 
 	// TODO: Contribute to github.com/microsoft/hcsshim/tree/main/internal/security
 	// so that these would be packages in there.
-	log.Infof("Limit secrets folder to NT AUTHORITY\\SYSTEM only")
 	if err := acl.Apply(
 		baseDir,
 		true,
@@ -72,11 +70,9 @@ func (p *program) run() {
 	); err != nil {
 		panic(err)
 	}
-	log.Infof("Grant permissions for ContainerAdministrator")
 	if err := security.GrantVmGroupAccess(baseDir, ContainerAdministratorSid); err != nil {
 		log.Fatal(err)
 	}
-	log.Infof("Grant permissions for ContainerUser")
 	if err := security.GrantVmGroupAccess(baseDir, ContainerUserSid); err != nil {
 		log.Fatal(err)
 	}
@@ -84,8 +80,8 @@ func (p *program) run() {
 	config := sdk.WindowsPipeConfig{
 		// SecurityDescriptor: sdk.AllowServiceSystemAdmin,
 		SecurityDescriptor: AllowSystemOnly,
-		InBufferSize:       4096,
-		OutBufferSize:      4096,
+		InBufferSize:       npipeMaxBuf,
+		OutBufferSize:      npipeMaxBuf,
 	}
 	if err := p.h.ServeWindows(npipe, "secret", sdk.WindowsDefaultDaemonRootDir(), &config); err != nil {
 		logrus.Errorf("Error serving volume plugin: %v", err)
