@@ -12,7 +12,6 @@ Other why you might end up to have local volume with that name instead of.
 # Usage
 ## Linux
 ```bash
-docker volume create --driver secret secret-test1
 docker run -it --rm -u nobody \
  --mount type=volume,volume-driver=secret,src=test1,dst=/secrets/test1 \
   bash
@@ -21,7 +20,6 @@ cat /secrets/test1
 
 ## Windows
 ```powershell
-docker volume create --driver secret secret-test1
 docker volume ls
 docker run -it --rm `
   --mount type=volume,volume-driver=secret,src=test1,dst=C:\secrets\test1 `
@@ -78,7 +76,7 @@ az ad sp create-for-rbac -n docker-secretprovider-plugin --years 5
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v0.3 \
+  ollijanatuinen/docker-secretprovider-plugin:v0.4 \
   SECRET_BACKEND="azure" \
   AZURE_TENANT_ID="13a69a3b-cf5f-4204-b274-3e9ce5240a60" \
   AZURE_CLIENT_ID="2bb1a59c-72c5-4fba-81b3-f22974dfdf58" \
@@ -116,7 +114,7 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\docker-secret" `
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v0.3 \
+  ollijanatuinen/docker-secretprovider-plugin:v0.4 \
   SECRET_BACKEND="vault" \
   VAULT_ADDR="http://10.10.10.100:8200" \
   VAULT_PATH="docker" \

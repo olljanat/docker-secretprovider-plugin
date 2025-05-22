@@ -149,9 +149,10 @@ func (d *VolumeDriver) Remove(r *volume.RemoveRequest) error {
 
 func (d *VolumeDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
 	d.mu.RLock()
-	defer d.mu.RUnlock()
+	volumes := d.volumes
+	d.mu.RUnlock()
 
-	_, exists := d.volumes[r.Name]
+	_, exists := volumes[r.Name]
 	if !exists {
 		return nil, fmt.Errorf("volume %s not found", r.Name)
 	}
@@ -161,11 +162,13 @@ func (d *VolumeDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error)
 
 func (d *VolumeDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
 	d.mu.RLock()
-	vol, exists := d.volumes[r.Name]
+	volumes := d.volumes
+	d.mu.RUnlock()
+
+	vol, exists := volumes[r.Name]
 	if !exists {
 		return nil, fmt.Errorf("volume %s not found", r.Name)
 	}
-	d.mu.RUnlock()
 	secretFile := filepath.Join(baseDir, r.Name)
 
 	if _, err := os.Stat(secretFile); os.IsNotExist(err) {
@@ -181,9 +184,10 @@ func (d *VolumeDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, err
 
 func (d *VolumeDriver) Unmount(r *volume.UnmountRequest) error {
 	d.mu.RLock()
-	defer d.mu.RUnlock()
+	volumes := d.volumes
+	d.mu.RUnlock()
 
-	if _, exists := d.volumes[r.Name]; !exists {
+	if _, exists := volumes[r.Name]; !exists {
 		return fmt.Errorf("volume %s not found", r.Name)
 	}
 	return nil

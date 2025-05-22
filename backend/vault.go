@@ -32,7 +32,7 @@ type listKeysResponse struct {
 
 func NewVaultBackend(vaultAddr, path, token string) (*VaultBackend, error) {
 	return &VaultBackend{
-		client:    &http.Client{Timeout: 60 * time.Second},
+		client:    &http.Client{Timeout: 5 * time.Second},
 		vaultAddr: vaultAddr,
 		path:      path,
 		token:     token,

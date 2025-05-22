@@ -64,13 +64,11 @@ func NewAzureKeyVaultBackend(vaultURL string) (*AzureKeyVaultBackend, error) {
 		clientID:     cid,
 		clientSecret: csecret,
 		vaultURL:     strings.TrimRight(vaultURL, "/"),
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		httpClient:   &http.Client{Timeout: 5 * time.Second},
 	}, nil
 }
 
 func (b *AzureKeyVaultBackend) acquireToken() error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	if time.Until(b.tokenExpiry) > time.Minute {
 		return nil
 	}

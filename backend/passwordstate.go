@@ -31,7 +31,9 @@ func NewPasswordstateBackend(baseURL, apiKey, listID string) *PasswordstateBacke
 
 func (b *PasswordstateBackend) FetchSecret(secretName string) (*FetchSecretResponse, error) {
 	url := fmt.Sprintf("%s/searchpasswords/%s?title=%s&PreventAuditing=true", b.baseURL, b.listID, url.QueryEscape(secretName))
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating HTTP request: %v", err)
@@ -70,7 +72,9 @@ func (b *PasswordstateBackend) FetchSecret(secretName string) (*FetchSecretRespo
 
 func (b *PasswordstateBackend) ListSecrets() ([]string, error) {
 	url := fmt.Sprintf("%s/searchpasswords/%s?PreventAuditing=true", b.baseURL, b.listID)
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating HTTP request for listing: %v", err)
