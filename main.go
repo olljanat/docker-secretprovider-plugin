@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
@@ -18,7 +19,8 @@ const (
 )
 
 var (
-	log = logger()
+	log       = logger()
+	validName = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
 )
 
 type SecretBackend interface {
@@ -30,6 +32,7 @@ type volumeInfo struct {
 	SecretName string
 	UpdatedAt  time.Time
 	ExpiresAt  time.Time
+	Valid      bool
 }
 
 type VolumeDriver struct {
@@ -61,6 +64,9 @@ func (d *VolumeDriver) startSecretRefresh() {
 			if err := d.updateSecretFile(name, vol, false); err != nil {
 				log.Errorf("Failed to update secret for volume %s: %v", name, err)
 			}
+
+			// Avoid API rate limiter issues by waiting 10 seconds between calls
+			time.Sleep(10 * time.Second)
 		}
 		d.mu.Unlock()
 	}
@@ -105,18 +111,27 @@ func (d *VolumeDriver) List() (*volume.ListResponse, error) {
 	d.mu.RUnlock()
 
 	for _, name := range names {
+		valid := true
 		if _, exists := volumes[name]; !exists {
+			if !validName.MatchString(name) {
+				log.Warnf("Skipping invalid secret with name %q. Must match [a-z0-9][a-z0-9_.-]*", name)
+				valid = false
+			}
 			d.mu.Lock()
 			volumes[name] = &volumeInfo{
 				SecretName: name,
 				UpdatedAt:  time.Time{},
+				Valid:      valid,
 			}
 			d.mu.Unlock()
 		}
 	}
 	var vols []*volume.Volume
 	for name := range volumes {
-		vols = append(vols, &volume.Volume{Name: name})
+		v := volumes[name]
+		if v.Valid {
+			vols = append(vols, &volume.Volume{Name: name})
+		}
 	}
 
 	return &volume.ListResponse{Volumes: vols}, nil
@@ -269,7 +284,7 @@ func main() {
 	d := NewVolumeDriver(b)
 	h := volume.NewHandler(d)
 
-	log.Infof("Starting secrets plugin with %s backend", backendType)
+	log.Infof("Starting secret plugin with %s backend", backendType)
 	serve(h)
 }
 
