@@ -6,16 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/docker/go-plugins-helpers/volume"
 	"github.com/olljanat/docker-secretprovider-plugin/backend"
+	"github.com/sirupsen/logrus"
 )
 
 const (
 	refreshInterval = 1 * time.Hour
 	dbFile          = "secrets.json"
+	npipeMaxBuf     = 4096
 )
 
 var (
@@ -40,6 +43,8 @@ type VolumeDriver struct {
 	backend SecretBackend
 	mu      sync.RWMutex
 }
+
+type simpleFormatter struct{}
 
 func NewVolumeDriver(backend SecretBackend) *VolumeDriver {
 	d := &VolumeDriver{
@@ -133,8 +138,17 @@ func (d *VolumeDriver) List() (*volume.ListResponse, error) {
 			vols = append(vols, &volume.Volume{Name: name})
 		}
 	}
+	resp := &volume.ListResponse{Volumes: vols}
 
-	return &volume.ListResponse{Volumes: vols}, nil
+	if runtime.GOOS == "windows" {
+		if data, err := json.Marshal(resp); err == nil {
+			if len(data) > npipeMaxBuf {
+				log.Errorf("named pipe buffer too small: response size=%d bytes, max=%d; increase InBufferSize/OutBufferSize", len(data), npipeMaxBuf)
+			}
+		}
+	}
+
+	return resp, nil
 }
 
 func (d *VolumeDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
@@ -215,6 +229,8 @@ func (d *VolumeDriver) Capabilities() *volume.CapabilitiesResponse {
 }
 
 func main() {
+	log.SetFormatter(&simpleFormatter{})
+
 	backendType := os.Getenv("SECRET_BACKEND")
 	if backendType == "" {
 		log.Fatal("SECRET_BACKEND environment variable is required (azure, passwordstate, vault)")
@@ -292,7 +308,7 @@ func (d *VolumeDriver) loadDB() error {
 	dbPath := filepath.Join(baseDir, dbFile)
 	data, err := os.ReadFile(dbPath)
 	if err != nil {
-		return err
+		return nil
 	}
 	var m map[string]volumeInfo
 	if err := json.Unmarshal(data, &m); err != nil {
@@ -327,4 +343,8 @@ func (d *VolumeDriver) saveDB() error {
 		return err
 	}
 	return os.Rename(tmp, dbPath)
+}
+
+func (f *simpleFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	return []byte(entry.Message + ""), nil
 }

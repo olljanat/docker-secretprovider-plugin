@@ -42,7 +42,7 @@ New-Service -Name "docker-secret" -DisplayName "Secrets plugin for Docker" `
 $log = "HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\docker-secret"
 New-Item -Path $log -Force
 Set-ItemProperty -Path $log -Name CustomSource -Value 1
-Set-ItemProperty -Path $log -Name EventMessageFile -Value "C:\Program Files\docker\docker-secretprovider-plugin.exe"
+Set-ItemProperty -Path $log -Name EventMessageFile -Value "%SystemRoot%\System32\EventCreate.exe"
 Set-ItemProperty -Path $log -Name TypesSupported -Value 7
 
 # Make Docker service depend on of plugin service
