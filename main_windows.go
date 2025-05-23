@@ -37,7 +37,7 @@ type program struct {
 func (p *program) Execute(args []string, r <-chan svc.ChangeRequest, s chan<- svc.Status) (bool, uint32) {
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 	s <- svc.Status{State: svc.StartPending}
-	go p.run()
+	go p.run(false)
 	s <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 
 loop:
@@ -53,7 +53,7 @@ loop:
 	return false, 0
 }
 
-func (p *program) run() {
+func (p *program) run(debug bool) {
 	log.Infof("Creating secrets folder: %v", baseDir)
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		if err := os.Mkdir(baseDir, os.ModePerm); err != nil {
@@ -61,16 +61,21 @@ func (p *program) run() {
 		}
 	}
 
-	// TODO: Contribute to github.com/microsoft/hcsshim/tree/main/internal/security
-	// so that these would be packages in there.
-	log.Infof("Limit secrets folder to NT AUTHORITY\\SYSTEM only")
-	if err := acl.Apply(
-		baseDir,
-		true,
-		false,
-		acl.GrantName(windows.GENERIC_ALL, "NT AUTHORITY\\SYSTEM"),
-	); err != nil {
-		panic(err)
+	sd := sdk.AllowServiceSystemAdmin
+	if !debug {
+		sd = AllowSystemOnly
+
+		// TODO: Contribute to github.com/microsoft/hcsshim/tree/main/internal/security
+		// so that these would be packages in there.
+		log.Infof("Limit secrets folder to NT AUTHORITY\\SYSTEM only")
+		if err := acl.Apply(
+			baseDir,
+			true,
+			false,
+			acl.GrantName(windows.GENERIC_ALL, "NT AUTHORITY\\SYSTEM"),
+		); err != nil {
+			panic(err)
+		}
 	}
 	log.Infof("Grant permissions for ContainerAdministrator")
 	if err := security.GrantVmGroupAccess(baseDir, ContainerAdministratorSid); err != nil {
@@ -82,8 +87,7 @@ func (p *program) run() {
 	}
 
 	config := sdk.WindowsPipeConfig{
-		// SecurityDescriptor: sdk.AllowServiceSystemAdmin,
-		SecurityDescriptor: AllowSystemOnly,
+		SecurityDescriptor: sd,
 		InBufferSize:       4096,
 		OutBufferSize:      4096,
 	}
@@ -96,7 +100,7 @@ func serve(h *volume.Handler) {
 	prg := &program{h: h}
 	if isSvc, err := svc.IsWindowsService(); err == nil && !isSvc {
 		log.Infof("Running in interactive mode")
-		prg.run()
+		prg.run(true)
 		return
 	}
 	err := svc.Run(ServiceName, prg)
