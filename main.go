@@ -319,6 +319,7 @@ func (d *VolumeDriver) loadDB() error {
 			SecretName: info.SecretName,
 			UpdatedAt:  info.UpdatedAt,
 			ExpiresAt:  info.ExpiresAt,
+			Valid:      info.Valid,
 		}
 	}
 	return nil
@@ -333,6 +334,7 @@ func (d *VolumeDriver) saveDB() error {
 			SecretName: v.SecretName,
 			UpdatedAt:  v.UpdatedAt,
 			ExpiresAt:  v.ExpiresAt,
+			Valid:      v.Valid,
 		}
 	}
 	data, err := json.MarshalIndent(m, "", "  ")
