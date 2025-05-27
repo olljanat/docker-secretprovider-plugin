@@ -56,7 +56,9 @@ func NewVolumeDriver(backend SecretBackend) *VolumeDriver {
 	if err := d.loadDB(); err != nil {
 		log.Errorf("Failed to read database from disk: %v", err)
 	}
-	go d.startSecretRefresh()
+
+	// Disabled for now and refreshing secret in Mount() instead of.
+	// go d.startSecretRefresh()
 	return d
 }
 
@@ -201,7 +203,7 @@ func (d *VolumeDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, err
 	}
 	secretFile := filepath.Join(baseDir, r.Name)
 
-	if _, err := os.Stat(secretFile); os.IsNotExist(err) {
+	if _, err := os.Stat(secretFile); os.IsNotExist(err) || time.Since(vol.UpdatedAt) >= time.Hour {
 		d.mu.Lock()
 		if err := d.updateSecretFile(r.Name, vol, true); err != nil {
 			log.Errorf("Failed to update secret for volume %s: %v", r.Name, err)
