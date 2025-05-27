@@ -65,16 +65,16 @@ func (d *VolumeDriver) startSecretRefresh() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		d.mu.Lock()
 		for name, vol := range d.volumes {
+			d.mu.Lock()
 			if err := d.updateSecretFile(name, vol, false); err != nil {
 				log.Errorf("Failed to update secret for volume %s: %v", name, err)
 			}
+			d.mu.Unlock()
 
 			// Avoid API rate limiter issues by waiting 10 seconds between calls
 			time.Sleep(10 * time.Second)
 		}
-		d.mu.Unlock()
 	}
 }
 
