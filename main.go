@@ -22,8 +22,9 @@ const (
 )
 
 var (
-	log       = logger()
-	validName = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
+	backendType string
+	log         = logger()
+	validName   = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
 )
 
 type SecretBackend interface {
@@ -102,7 +103,7 @@ func (d *VolumeDriver) updateSecretFile(volumeName string, vol *volumeInfo, add 
 }
 
 func (d *VolumeDriver) Create(r *volume.CreateRequest) error {
-	return nil
+	return fmt.Errorf("not implemented. Create secret to %s instead", backendType)
 }
 
 func (d *VolumeDriver) List() (*volume.ListResponse, error) {
@@ -173,7 +174,7 @@ func (d *VolumeDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 }
 
 func (d *VolumeDriver) Remove(r *volume.RemoveRequest) error {
-	return nil
+	return fmt.Errorf("not implemented. Remove secret from %s instead", backendType)
 }
 
 func (d *VolumeDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
@@ -231,7 +232,7 @@ func (d *VolumeDriver) Capabilities() *volume.CapabilitiesResponse {
 func main() {
 	log.SetFormatter(&simpleFormatter{})
 
-	backendType := os.Getenv("SECRET_BACKEND")
+	backendType = os.Getenv("SECRET_BACKEND")
 	if backendType == "" {
 		log.Fatal("SECRET_BACKEND environment variable is required (azure, passwordstate, vault)")
 	}
