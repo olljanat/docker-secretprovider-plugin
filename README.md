@@ -146,7 +146,8 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\docker-secret" `
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v1.0 \
+  ollijanatuinen/docker-secretprovider-plugin:v0.7 \
+  SECRET_BACKEND="passwordstate" \
   PASSWORDSTATE_BASE_URL="https://passwordstate/api" \
   PASSWORDSTATE_API_KEY="<api key>" \
   PASSWORDSTATE_LIST_ID="123"
@@ -165,3 +166,10 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\docker-secret" `
   "PASSWORDSTATE_LIST_ID=485"
 )
 ```
+
+# Troubleshooting
+If secrets plugin writes events to:
+* Windows event log with provider name `docker-secret`
+* To Docker engine log ( `/var/log/docker.log` ) with plugin ID.
+
+Most common issue is that some of the environment variables is missing and contains incorrect value.
