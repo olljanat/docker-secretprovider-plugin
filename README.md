@@ -76,7 +76,7 @@ az ad sp create-for-rbac -n docker-secretprovider-plugin --years 5
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v0.7 \
+  ollijanatuinen/docker-secretprovider-plugin:v1.0 \
   SECRET_BACKEND="azure" \
   AZURE_TENANT_ID="13a69a3b-cf5f-4204-b274-3e9ce5240a60" \
   AZURE_CLIENT_ID="2bb1a59c-72c5-4fba-81b3-f22974dfdf58" \
@@ -114,7 +114,7 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\docker-secret" `
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v0.7 \
+  ollijanatuinen/docker-secretprovider-plugin:v1.0 \
   SECRET_BACKEND="vault" \
   VAULT_ADDR="http://10.10.10.100:8200" \
   VAULT_PATH="docker" \
@@ -146,7 +146,7 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\docker-secret" `
 docker plugin install \
   --alias secret \
   --grant-all-permissions \
-  ollijanatuinen/docker-secretprovider-plugin:v0.7 \
+  ollijanatuinen/docker-secretprovider-plugin:v1.0 \
   SECRET_BACKEND="passwordstate" \
   PASSWORDSTATE_BASE_URL="https://passwordstate/api" \
   PASSWORDSTATE_API_KEY="<api key>" \

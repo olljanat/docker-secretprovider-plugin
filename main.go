@@ -25,6 +25,7 @@ var (
 	backendType string
 	log         = logger()
 	validName   = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
+	Version     string
 )
 
 type SecretBackend interface {
@@ -232,6 +233,11 @@ func (d *VolumeDriver) Capabilities() *volume.CapabilitiesResponse {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "-V" {
+		fmt.Printf("Version: %s\n", Version)
+		return
+	}
+
 	log.SetFormatter(&simpleFormatter{})
 
 	backendType = os.Getenv("SECRET_BACKEND")
