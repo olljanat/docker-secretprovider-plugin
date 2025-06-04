@@ -13,7 +13,7 @@ Other why you might end up to have local volume with that name instead of.
 ## Linux
 ```bash
 docker run -it --rm -u nobody \
- --mount type=volume,volume-driver=secret,src=test1,dst=/secrets/test1 \
+ --mount type=volume,volume-driver=secret,src=test1,dst=/secrets/test1,readonly \
   bash
 cat /secrets/test1
 ```
@@ -22,7 +22,7 @@ cat /secrets/test1
 ```powershell
 docker volume ls
 docker run -it --rm `
-  --mount type=volume,volume-driver=secret,src=test1,dst=C:\secrets\test1 `
+  --mount type=volume,volume-driver=secret,src=test1,dst=C:\secrets\test1,readonly `
   mcr.microsoft.com/windows/nanoserver:ltsc2022
 type C:\secrets\test1
 ```
